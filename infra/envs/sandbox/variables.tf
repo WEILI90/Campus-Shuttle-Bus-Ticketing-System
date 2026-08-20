@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "name_prefix" {
   description = "Prefix applied to every resource name, per the assignment-{resource} convention."
   type        = string
-  default     = "WEB ASSIGNMENT"
+  default     = "assignment-shuttle-bus"
 }
 
 variable "vpc_cidr" {
