@@ -5,7 +5,7 @@ variable "name_prefix" {
 }
 
 variable "bucket_name" {
-  description = "Globally-unique S3 bucket name for uploaded event images."
+  description = "Globally-unique S3 bucket name for uploaded shuttle route images."
   type        = string
   default     = "assignment-s3-uploads"
 }

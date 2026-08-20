@@ -61,7 +61,7 @@ variable "secret_name" {
 }
 
 variable "s3_bucket_name" {
-  description = "Globally-unique bucket name for event image uploads."
+  description = "Globally-unique bucket name for shuttle route image uploads."
   type        = string
   default     = "assignment-s3-uploads"
 }
