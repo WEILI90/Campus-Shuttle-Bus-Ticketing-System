@@ -46,7 +46,7 @@ jobs:
 
       - name: Upload schema.sql, seed script, and sample images to S3
         run: |
-          aws s3 cp -shuttle-bus-ticketing/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
+          aws s3 cp shuttle-bus-ticketing/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
           aws s3 cp infra/scripts/seed-db.sh "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCRIPT_KEY }}"
           # Upload sample event images so the seed data's image_url references
           # resolve. seed-db.sh will rewrite the DB paths to S3 URLs after import.
