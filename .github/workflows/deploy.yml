@@ -63,9 +63,15 @@ jobs:
         with:
           php-version: "8.2"
 
-      - name: Install app dependencies (AWS SDK for PHP)
+      - name: Install app dependencies (if Composer is configured)
         working-directory: ${{ env.APP_DIR }}
-        run: composer install --no-dev --optimize-autoloader
+        shell: bash
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-dev --optimize-autoloader
+          else
+            echo "No composer.json in $PWD; skipping Composer install for this PHP app."
+          fi
 
       - name: Package application
         working-directory: ${{ env.APP_DIR }}
