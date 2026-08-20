@@ -9,7 +9,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  APP_TAG: assignment-event-ticketing
+  APP_TAG: assignment-shuttle-bus
   SCHEMA_KEY: db-init/schema.sql
   SCRIPT_KEY: db-init/seed-db.sh
 
@@ -46,11 +46,11 @@ jobs:
 
       - name: Upload schema.sql, seed script, and sample images to S3
         run: |
-          aws s3 cp event-ticketing/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
+          aws s3 cp shuttle-bus/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
           aws s3 cp infra/scripts/seed-db.sh "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCRIPT_KEY }}"
           # Upload sample event images so the seed data's image_url references
           # resolve. seed-db.sh will rewrite the DB paths to S3 URLs after import.
-          aws s3 sync event-ticketing/uploads/ "s3://${{ env.SCHEMA_BUCKET }}/uploads/" \
+          aws s3 sync shuttle-bus/uploads/ "s3://${{ env.SCHEMA_BUCKET }}/uploads/" \
             --exclude "index.html"
 
       - name: Run seed script on a running app instance via SSM

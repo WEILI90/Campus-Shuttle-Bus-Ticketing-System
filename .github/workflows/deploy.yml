@@ -22,9 +22,9 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  APP_DIR: event-ticketing
+  APP_DIR: shuttle-bus
   ARTIFACT_PREFIX: artifacts
-  APP_TAG: assignment-event-ticketing
+  APP_TAG: assignment-shuttle-bus
 
 jobs:
   infra:
