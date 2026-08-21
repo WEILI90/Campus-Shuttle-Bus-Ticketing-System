@@ -96,15 +96,21 @@ jobs:
               --query "Reservations[].Instances[].InstanceId" --output text)
 
             if [ -n "$INSTANCE_IDS" ]; then
-              IDS_CSV=$(echo "$INSTANCE_IDS" | tr '\t ' ',' | sed 's/,,*/,/g; s/^,//; s/,$//')
-              ONLINE_COUNT=$(aws ssm describe-instance-information \
-                --filters "Key=InstanceIds,Values=$IDS_CSV" \
-                --query "length(InstanceInformationList[?PingStatus=='Online'])" --output text)
+              echo "Running instances matching App=${{ env.APP_TAG }}: $INSTANCE_IDS"
 
-              if [ "$ONLINE_COUNT" != "0" ] && [ "$ONLINE_COUNT" != "None" ]; then
-                echo "Found $ONLINE_COUNT SSM-managed instance(s) online."
-                exit 0
-              fi
+              for INSTANCE_ID in $INSTANCE_IDS; do
+                PING_STATUS=$(aws ssm describe-instance-information \
+                  --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                  --query "InstanceInformationList[0].PingStatus" --output text)
+
+                echo "$INSTANCE_ID SSM status: $PING_STATUS"
+                if [ "$PING_STATUS" = "Online" ]; then
+                  echo "Found SSM-online instance: $INSTANCE_ID"
+                  exit 0
+                fi
+              done
+            else
+              echo "No running instances match App=${{ env.APP_TAG }}"
             fi
 
             echo "Waiting for at least one running + SSM-online instance (attempt $i/30)..."
