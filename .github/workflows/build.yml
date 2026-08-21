@@ -26,6 +26,9 @@ on:
       s3_bucket:
         description: "Resolved uploads/artifacts S3 bucket name (from terraform output). Only populated on apply."
         value: ${{ jobs.terraform.outputs.s3_bucket }}
+      asg_name:
+        description: "Resolved application Auto Scaling Group name from Terraform."
+        value: ${{ jobs.terraform.outputs.asg_name }}
 
 env:
   AWS_REGION: us-east-1
@@ -37,6 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       s3_bucket: ${{ steps.tf_output.outputs.s3_bucket }}
+      asg_name: ${{ steps.tf_output.outputs.asg_name }}
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -82,7 +86,9 @@ jobs:
       - name: Capture Terraform outputs
         id: tf_output
         if: ${{ inputs.action == 'apply' }}
-        run: echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "s3_bucket=$(terraform output -raw s3_bucket_name)" >> "$GITHUB_OUTPUT"
+          echo "asg_name=$(terraform output -raw asg_name)" >> "$GITHUB_OUTPUT"
 
       - name: Terraform destroy
         if: ${{ inputs.action == 'destroy' }}

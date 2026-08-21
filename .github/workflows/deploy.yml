@@ -42,6 +42,7 @@ jobs:
     # value - keeps this in lockstep with the account-ID-suffixed bucket name.
     env:
       ARTIFACT_BUCKET: ${{ needs.infra.outputs.s3_bucket }}
+      ASG_NAME: ${{ needs.infra.outputs.asg_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -91,12 +92,13 @@ jobs:
           set -euo pipefail
 
           for i in $(seq 1 30); do
-            INSTANCE_IDS=$(aws ec2 describe-instances \
-              --filters "Name=tag:App,Values=${{ env.APP_TAG }}" "Name=instance-state-name,Values=running" \
-              --query "Reservations[].Instances[].InstanceId" --output text)
+            INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names "$ASG_NAME" \
+              --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService' && HealthStatus=='Healthy'].InstanceId" \
+              --output text)
 
             if [ -n "$INSTANCE_IDS" ]; then
-              echo "Running instances matching App=${{ env.APP_TAG }}: $INSTANCE_IDS"
+              echo "Healthy instances in ASG $ASG_NAME: $INSTANCE_IDS"
 
               for INSTANCE_ID in $INSTANCE_IDS; do
                 PING_STATUS=$(aws ssm describe-instance-information \
@@ -110,7 +112,7 @@ jobs:
                 fi
               done
             else
-              echo "No running instances match App=${{ env.APP_TAG }}"
+              echo "No healthy InService instances found in ASG $ASG_NAME"
             fi
 
             echo "Waiting for at least one running + SSM-online instance (attempt $i/30)..."
@@ -124,18 +126,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=${{ env.APP_TAG }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].InstanceId" --output text)
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService' && HealthStatus=='Healthy'].InstanceId" \
+            --output text)
 
           if [ -z "$INSTANCE_IDS" ]; then
-            echo "No running instances found for tag App=${{ env.APP_TAG }}"
+            echo "No healthy InService instances found in ASG $ASG_NAME"
             exit 1
           fi
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:App,Values=${{ env.APP_TAG }}" \
+            --instance-ids $INSTANCE_IDS \
             --comment "${{ env.APP_TAG }} deploy" \
             --parameters '{"commands":[
               "cloud-init status --wait",
