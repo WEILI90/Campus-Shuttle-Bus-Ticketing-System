@@ -24,7 +24,7 @@ env:
   AWS_REGION: us-east-1
   APP_DIR: shuttle-bus-ticketing
   ARTIFACT_PREFIX: artifacts
-  APP_TAG: assignment-shuttle-bus-ticketing
+  APP_TAG: assignment-shuttle-bus
 
 
 jobs:
@@ -43,6 +43,7 @@ jobs:
     # value - keeps this in lockstep with the account-ID-suffixed bucket name.
     env:
       ARTIFACT_BUCKET: ${{ needs.infra.outputs.s3_bucket }}
+      ASG_NAME: ${{ needs.infra.outputs.asg_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -64,9 +65,15 @@ jobs:
         with:
           php-version: "8.2"
 
-      - name: Install app dependencies (AWS SDK for PHP)
+      - name: Install app dependencies (if Composer is configured)
         working-directory: ${{ env.APP_DIR }}
-        run: composer install --no-dev --optimize-autoloader
+        shell: bash
+        run: |
+          if [ -f composer.json ]; then
+            composer install --no-dev --optimize-autoloader
+          else
+            echo "No composer.json in $PWD; skipping Composer install for this PHP app."
+          fi
 
       - name: Package application
         working-directory: ${{ env.APP_DIR }}
@@ -86,20 +93,27 @@ jobs:
           set -euo pipefail
 
           for i in $(seq 1 30); do
-            INSTANCE_IDS=$(aws ec2 describe-instances \
-              --filters "Name=tag:App,Values=${{ env.APP_TAG }}" "Name=instance-state-name,Values=running" \
-              --query "Reservations[].Instances[].InstanceId" --output text)
+            INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+              --auto-scaling-group-names "$ASG_NAME" \
+              --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService' && HealthStatus=='Healthy'].InstanceId" \
+              --output text)
 
             if [ -n "$INSTANCE_IDS" ]; then
-              IDS_CSV=$(echo "$INSTANCE_IDS" | tr '\t ' ',' | sed 's/,,*/,/g; s/^,//; s/,$//')
-              ONLINE_COUNT=$(aws ssm describe-instance-information \
-                --filters "Key=InstanceIds,Values=$IDS_CSV" \
-                --query "length(InstanceInformationList[?PingStatus=='Online'])" --output text)
+              echo "Healthy instances in ASG $ASG_NAME: $INSTANCE_IDS"
 
-              if [ "$ONLINE_COUNT" != "0" ] && [ "$ONLINE_COUNT" != "None" ]; then
-                echo "Found $ONLINE_COUNT SSM-managed instance(s) online."
-                exit 0
-              fi
+              for INSTANCE_ID in $INSTANCE_IDS; do
+                PING_STATUS=$(aws ssm describe-instance-information \
+                  --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+                  --query "InstanceInformationList[0].PingStatus" --output text)
+
+                echo "$INSTANCE_ID SSM status: $PING_STATUS"
+                if [ "$PING_STATUS" = "Online" ]; then
+                  echo "Found SSM-online instance: $INSTANCE_ID"
+                  exit 0
+                fi
+              done
+            else
+              echo "No healthy InService instances found in ASG $ASG_NAME"
             fi
 
             echo "Waiting for at least one running + SSM-online instance (attempt $i/30)..."
@@ -113,18 +127,19 @@ jobs:
         run: |
           set -euo pipefail
 
-          INSTANCE_IDS=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=${{ env.APP_TAG }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[].Instances[].InstanceId" --output text)
+          INSTANCE_IDS=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService' && HealthStatus=='Healthy'].InstanceId" \
+            --output text)
 
           if [ -z "$INSTANCE_IDS" ]; then
-            echo "No running instances found for tag App=${{ env.APP_TAG }}"
+            echo "No healthy InService instances found in ASG $ASG_NAME"
             exit 1
           fi
 
           COMMAND_ID=$(aws ssm send-command \
             --document-name "AWS-RunShellScript" \
-            --targets "Key=tag:App,Values=${{ env.APP_TAG }}" \
+            --instance-ids $INSTANCE_IDS \
             --comment "${{ env.APP_TAG }} deploy" \
             --parameters '{"commands":[
               "cloud-init status --wait",

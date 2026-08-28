@@ -9,7 +9,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  APP_TAG: assignment-shuttle-bus-ticketing
+  APP_TAG: assignment-shuttle-bus
   SCHEMA_KEY: db-init/schema.sql
   SCRIPT_KEY: db-init/seed-db.sh
 
@@ -43,10 +43,11 @@ jobs:
         run: |
           terraform init -input=false
           echo "SCHEMA_BUCKET=$(terraform output -raw s3_bucket_name)" >> "$GITHUB_ENV"
+          echo "ASG_NAME=$(terraform output -raw asg_name)" >> "$GITHUB_ENV"
 
       - name: Upload schema.sql, seed script, and sample images to S3
         run: |
-          aws s3 cp -shuttle-bus-ticketing/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
+          aws s3 cp shuttle-bus-ticketing/schema.sql "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCHEMA_KEY }}"
           aws s3 cp infra/scripts/seed-db.sh "s3://${{ env.SCHEMA_BUCKET }}/${{ env.SCRIPT_KEY }}"
           # Upload sample event images so the seed data's image_url references
           # resolve. seed-db.sh will rewrite the DB paths to S3 URLs after import.
@@ -57,12 +58,22 @@ jobs:
         run: |
           set -euo pipefail
 
-          INSTANCE_ID=$(aws ec2 describe-instances \
-            --filters "Name=tag:App,Values=${{ env.APP_TAG }}" "Name=instance-state-name,Values=running" \
-            --query "Reservations[0].Instances[0].InstanceId" --output text)
+          INSTANCE_ID=$(aws autoscaling describe-auto-scaling-groups \
+            --auto-scaling-group-names "$ASG_NAME" \
+            --query "AutoScalingGroups[0].Instances[?LifecycleState=='InService' && HealthStatus=='Healthy'].InstanceId | [0]" \
+            --output text)
 
           if [ -z "$INSTANCE_ID" ] || [ "$INSTANCE_ID" == "None" ]; then
-            echo "No running app instance found - apply infra and wait for at least one healthy instance first."
+            echo "No healthy InService instance found in ASG $ASG_NAME - apply infra and wait for a healthy instance first."
+            exit 1
+          fi
+
+          PING_STATUS=$(aws ssm describe-instance-information \
+            --filters "Key=InstanceIds,Values=$INSTANCE_ID" \
+            --query "InstanceInformationList[0].PingStatus" --output text)
+
+          if [ "$PING_STATUS" != "Online" ]; then
+            echo "Instance $INSTANCE_ID is not SSM-online (status: $PING_STATUS)."
             exit 1
           fi
 
