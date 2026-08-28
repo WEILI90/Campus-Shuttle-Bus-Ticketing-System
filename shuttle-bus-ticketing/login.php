@@ -24,11 +24,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$pageTitle = 'Login';
+$pageTitle = 'TEST1234';
 require 'partials/header.php';
 ?>
 <div class="auth-card">
-<h1>Login</h1>
+<h1>Logi123n</h1>
 <?php if ($error): ?><p class="alert alert-error"><?= htmlspecialchars($error) ?></p><?php endif; ?>
 <form method="post">
 <label>Email <span class="required-mark">*</span> <input type="email" name="email" required></label>
