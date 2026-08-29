@@ -1,0 +1,15 @@
+<?php
+require '../config.php';
+require '../auth.php';
+require_admin();
+$threads = $conn->query('SELECT st.id, st.updated_at, u.name, u.email, (SELECT message FROM support_messages sm WHERE sm.thread_id = st.id ORDER BY sm.created_at DESC LIMIT 1) AS latest_message FROM support_threads st JOIN users u ON u.id = st.user_id ORDER BY st.updated_at DESC')->fetch_all(MYSQLI_ASSOC);
+$selected = (int)($_GET['thread_id'] ?? ($threads[0]['id'] ?? 0));
+$pageTitle = 'Support Chat';
+require 'partials/header.php';
+?>
+<div class="page-header"><h1>Support Chat</h1><p>Live conversations with users. Keep this page open to receive new messages.</p></div>
+<div class="support-layout"><aside class="thread-list"><?php if (!$threads): ?><p class="form-hint">No conversations yet.</p><?php else: foreach ($threads as $thread): ?><a class="thread-item <?= $selected === (int)$thread['id'] ? 'selected' : '' ?>" href="support.php?thread_id=<?= (int)$thread['id'] ?>"><strong><?= htmlspecialchars($thread['name']) ?></strong><small><?= htmlspecialchars($thread['email']) ?></small><span><?= htmlspecialchars(mb_strimwidth($thread['latest_message'] ?? '', 0, 70, '...')) ?></span></a><?php endforeach; endif; ?></aside><section class="chat-card"><div id="chat-messages" class="chat-messages" aria-live="polite"><p class="form-hint">Select a conversation.</p></div><?php if ($selected): ?><form id="chat-form" class="chat-form"><textarea id="chat-input" rows="2" maxlength="2000" placeholder="Reply to this user..." required></textarea><button type="submit">Send reply</button></form><p id="chat-error" class="alert alert-error" hidden></p><?php endif; ?></section></div>
+<?php if ($selected): ?><script>
+(function () { var threadId = <?= $selected ?>, list = document.getElementById('chat-messages'), form = document.getElementById('chat-form'), input = document.getElementById('chat-input'), error = document.getElementById('chat-error'); function render(data) { list.innerHTML = data.messages.length ? data.messages.map(function (m) { return '<div class="chat-message ' + (Number(m.sender_user_id) === <?= (int)current_user_id() ?> ? 'mine' : 'theirs') + '"><p>' + m.message.replace(/[&<>]/g, function (c) { return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }) + '</p><small>' + new Date(m.created_at.replace(' ', 'T')).toLocaleString() + '</small></div>'; }).join('') : '<p class="form-hint">No messages yet.</p>'; list.scrollTop = list.scrollHeight; } function load() { fetch('../support_api.php?thread_id=' + threadId).then(function (r) { return r.json(); }).then(render); } form.addEventListener('submit', function (e) { e.preventDefault(); var body = new URLSearchParams({thread_id:threadId, message:input.value}); fetch('../support_api.php', {method:'POST',body:body}).then(function(r){return r.json();}).then(function(d){if(d.error) throw new Error(d.error); input.value=''; render(d);}).catch(function(e){error.textContent=e.message;error.hidden=false;}); }); load(); setInterval(load, 4000); })();
+</script><?php endif; ?>
+<?php require 'partials/footer.php'; ?>

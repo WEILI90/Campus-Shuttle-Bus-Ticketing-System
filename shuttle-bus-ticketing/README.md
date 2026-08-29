@@ -34,19 +34,26 @@ scratch.
   a route scheduled for today whose bus already left can't be booked for today (a
   future date is never affected, no matter the departure time).
 - "My Tickets" on the homepage, with edit/cancel for your own tickets.
+- Ticket requests follow a `pending` -> `confirmed` -> `done` workflow controlled by admins.
+- Each account is limited to `MAX_DAILY_SEATS` seats per travel date (6 by default; configure it as an environment variable).
+- Authenticated users can have a live, database-backed support chat with the transport office; the admin Support page polls for new messages.
 - Register/login/logout, account page, dark/light mode, password visibility toggle,
   TARUMT faculty dropdown at registration.
 - Contact form and testimonials (reviews), both moderated by admin.
 
 **Admin panel** (`admin/`, gated by an `is_admin` flag — admins land directly on
-`admin/routes.php`, never the public site)
+`admin/dashboard.php`, never the public site)
+- Operations dashboard with booking/revenue/today stats, busiest route, seven-day route demand chart, and status totals.
 - Full CRUD for routes: name, departure time, price, photo.
 - View/cancel any user's ticket.
 - Moderate testimonials and view contact messages.
 - Manage user accounts: promote/demote admin access, delete an account (cascades — deleting a user also deletes all of their bookings/orders/tickets and testimonials in the same transaction, so there's nothing left over to clean up manually), or create a brand-new admin account directly (`admin/user_create.php`) without needing that person to self-register first. An admin can never delete or demote their own account.
 
-There's deliberately **no admin dashboard** (`admin/index.php`) — that's left as an
-exercise using the same query/render patterns as the other admin pages.
+When upgrading an existing database instead of importing the schema from scratch, run:
+```
+ALTER TABLE tickets ADD COLUMN status ENUM('pending', 'confirmed', 'done') NOT NULL DEFAULT 'pending';
+```
+Then create the `support_threads` and `support_messages` tables from `schema.sql`.
 
 ## Tech stack
 
@@ -106,7 +113,7 @@ Regular users register their own accounts via the Register page.
 | `route_availability.php` | JSON endpoint the ticket form fetches to grey out fully-booked routes |
 | `routes.php`, `about.php`, `contact.php`, `testimonials.php` | Public informational pages |
 | `partials/header.php` / `partials/footer.php` | Shared navbar/footer, included by every page |
-| `admin/` | Admin-only CRUD for routes, tickets, testimonials, messages, users |
+| `admin/` | Admin-only dashboard and CRUD for routes, tickets, testimonials, messages, users, and support chats |
 | `uploads/` | Uploaded route photos |
 | `style.css` | Shared styling (navbar, cards, forms, tables, dark/light mode) |
 

@@ -19,7 +19,7 @@ if ($search !== '') {
 $myTickets = [];
 if ($uid = current_user_id()) {
     $stmt = $conn->prepare('
-        SELECT t.id, r.route_name, r.origin, r.destination, r.departure_time, t.travel_date, t.seat_quantity, t.total_price
+        SELECT t.id, r.route_name, r.origin, r.destination, r.departure_time, t.travel_date, t.seat_quantity, t.total_price, t.status
         FROM tickets t
         JOIN routes r ON r.id = t.route_id
         WHERE t.user_id = ?
@@ -97,7 +97,7 @@ require 'partials/header.php';
 </div>
 <?php else: ?>
 <table>
-<tr><th>Route</th><th>Travel Date</th><th>Departs</th><th>Seats</th><th>Total (RM)</th><th>Actions</th></tr>
+<tr><th>Route</th><th>Travel Date</th><th>Departs</th><th>Seats</th><th>Total (RM)</th><th>Status</th><th>Actions</th></tr>
 <?php foreach ($myTickets as $t): ?>
 <tr>
 <td><?= htmlspecialchars($t['route_name']) ?></td>
@@ -105,6 +105,7 @@ require 'partials/header.php';
 <td><?= htmlspecialchars($t['departure_time']) ?></td>
 <td><?= (int)$t['seat_quantity'] ?></td>
 <td><?= number_format($t['total_price'], 2) ?></td>
+<td><span class="badge badge-<?= htmlspecialchars($t['status']) ?>"><?= htmlspecialchars(ucfirst($t['status'])) ?></span></td>
 <td>
 <a class="btn btn-secondary btn-small" href="edit.php?id=<?= (int)$t['id'] ?>">Edit</a>
 <form action="delete.php" method="post" style="display:inline" onsubmit="return confirm('Cancel this ticket?');">

@@ -41,9 +41,30 @@ CREATE TABLE tickets (
   travel_date DATE NOT NULL,
   seat_quantity INT NOT NULL DEFAULT 1,
   total_price DECIMAL(10,2) NOT NULL,
+  status ENUM('pending', 'confirmed', 'done') NOT NULL DEFAULT 'pending',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (route_id) REFERENCES routes(id)
+);
+
+CREATE TABLE support_threads (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NOT NULL UNIQUE,
+  status ENUM('open', 'closed') NOT NULL DEFAULT 'open',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE TABLE support_messages (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  thread_id INT NOT NULL,
+  sender_user_id INT NULL,
+  message TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (thread_id) REFERENCES support_threads(id) ON DELETE CASCADE,
+  FOREIGN KEY (sender_user_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_support_messages_thread (thread_id, created_at)
 );
 
 CREATE TABLE testimonials (

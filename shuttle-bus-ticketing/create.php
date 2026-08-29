@@ -49,6 +49,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     : 'This route is fully booked for that date.';
                 $conn->rollback();
             } else {
+                $stmt = $conn->prepare('SELECT COALESCE(SUM(seat_quantity), 0) AS booked FROM tickets WHERE user_id = ? AND travel_date = ?');
+                $stmt->bind_param('is', $uid, $travel_date);
+                $stmt->execute();
+                $dailyBooked = (int)$stmt->get_result()->fetch_assoc()['booked'];
+                $stmt->close();
+
+                if ($dailyBooked + $seat_quantity > MAX_DAILY_SEATS) {
+                    $remaining = MAX_DAILY_SEATS - $dailyBooked;
+                    $error = $remaining > 0
+                        ? "You can book $remaining more seat(s) for this date. The daily limit is " . MAX_DAILY_SEATS . ' seats.'
+                        : 'You have reached the daily booking limit of ' . MAX_DAILY_SEATS . ' seats.';
+                    $conn->rollback();
+                } else {
                 $total_price = $route['price'] * $seat_quantity;
 
                 $stmt = $conn->prepare('INSERT INTO tickets (user_id, route_id, travel_date, seat_quantity, total_price) VALUES (?, ?, ?, ?, ?)');
@@ -58,6 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conn->commit();
                 header('Location: index.php');
                 exit;
+            }
             }
         }
     }
@@ -82,6 +96,7 @@ require 'partials/header.php';
 <label>Travel Date <input type="date" name="travel_date" id="travel-date" value="<?= htmlspecialchars($selectedDate) ?>" min="<?= date('Y-m-d') ?>" required></label>
 <p class="form-hint" id="route-availability-hint"></p>
 <label>Number of Seats <input type="number" name="seat_quantity" min="1" value="1" required></label>
+<p class="form-hint">Daily account limit: <?= MAX_DAILY_SEATS ?> seats across all routes.</p>
 <button type="submit">Book Ticket</button>
 </form>
 <script>
