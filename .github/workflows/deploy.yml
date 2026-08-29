@@ -26,6 +26,7 @@ env:
   ARTIFACT_PREFIX: artifacts
   APP_TAG: assignment-shuttle-bus
 
+
 jobs:
   infra:
     name: Apply infrastructure (prerequisite for app deploy)
