@@ -32,11 +32,12 @@ resource "aws_launch_template" "app" {
 
   # Bootstraps Apache/PHP and the DB env vars from Secrets Manager. The actual
   # application code is deployed afterwards by the CD workflow via SSM.
-  user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tftpl", {
+    user_data = base64encode(templatefile("${path.module}/templates/user_data.sh.tftpl", {
     secret_arn      = var.secret_arn
     aws_region      = var.aws_region
     artifact_bucket = var.artifact_bucket
     artifact_key    = var.artifact_key
+    log_group_name  = var.log_group_name
   }))
 
   tag_specifications {

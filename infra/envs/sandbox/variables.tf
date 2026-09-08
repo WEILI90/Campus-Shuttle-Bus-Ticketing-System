@@ -91,3 +91,15 @@ variable "asg_desired_capacity" {
   type    = number
   default = 2
 }
+
+variable "alert_email" {
+  description = "Email address that receives SNS alarm notifications (CloudWatch alarms -> SNS). Leave blank to create the topic/alarms without a subscription."
+  type        = string
+  default     = ""
+}
+
+variable "log_retention_days" {
+  description = "How long CloudWatch keeps the app's Apache access/error logs."
+  type        = number
+  default     = 14
+}
