@@ -1,89 +1,63 @@
-# Generated once by Terraform, never typed/committed anywhere. Stored in
-# Secrets Manager below and read by EC2 instances at boot via their IAM role.
-resource "random_password" "db" {
-  length           = 20
-  special          = true
-  override_special = "!#$%&*()-_=+[]{}<>:?"
+# assignment-s3-uploads: holds event photo uploads. Bucket ACLs stay blocked;
+# only unauthenticated GetObject under uploads/* is allowed via bucket policy so
+# images render in the browser, without allowing public listing or writes.
+resource "terraform_data" "uploads" {
+  input = var.bucket_name
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      aws s3api create-bucket --bucket "${var.bucket_name}" --region us-east-1
+      aws s3api put-bucket-tagging --bucket "${var.bucket_name}" --tagging "TagSet=[{Key=Name,Value=${var.name_prefix}-s3-uploads}]"
+    EOT
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      aws s3 rm "s3://${self.input}" --recursive
+      aws s3api delete-bucket --bucket "${self.input}" --region us-east-1
+    EOT
+  }
 }
 
-# Used to make the S3 bucket name globally unique (S3 bucket names are global
-# across every AWS account) while keeping the assignment- prefix convention.
-data "aws_caller_identity" "current" {}
+resource "aws_s3_bucket_public_access_block" "uploads" {
+  bucket = var.bucket_name
 
-module "vpc" {
-  source = "../../modules/vpc"
+  depends_on = [terraform_data.uploads]
 
-  name_prefix          = var.name_prefix
-  vpc_cidr             = var.vpc_cidr
-  azs                  = var.azs
-  public_subnet_cidrs  = var.public_subnet_cidrs
-  private_subnet_cidrs = var.private_subnet_cidrs
+  block_public_acls       = true
+  ignore_public_acls      = true
+  block_public_policy     = false
+  restrict_public_buckets = false
 }
 
-module "security_groups" {
-  source = "../../modules/security-groups"
+resource "aws_s3_bucket_policy" "public_read" {
+  bucket = var.bucket_name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "PublicReadEventImages"
+        Effect    = "Allow"
+        Principal = "*"
+        Action    = "s3:GetObject"
+        Resource  = "arn:aws:s3:::${var.bucket_name}/${var.public_read_prefix}"
+      }
+    ]
+  })
 
-  name_prefix = var.name_prefix
-  vpc_id      = module.vpc.vpc_id
-  vpc_cidr    = var.vpc_cidr
+  depends_on = [terraform_data.uploads, aws_s3_bucket_public_access_block.uploads]
 }
 
-module "s3" {
-  source = "../../modules/s3"
+resource "aws_s3_bucket_cors_configuration" "uploads" {
+  bucket = var.bucket_name
 
-  name_prefix = var.name_prefix
-  # Suffix the account ID so the globally-unique bucket name doesn't collide
-  # with another account's, e.g. assignment-s3-uploads-123456789012.
-  bucket_name = "${var.s3_bucket_name}-${data.aws_caller_identity.current.account_id}"
-}
+  depends_on = [terraform_data.uploads]
 
-module "rds" {
-  source = "../../modules/rds"
-
-  name_prefix        = var.name_prefix
-  private_subnet_ids = module.vpc.private_subnet_ids
-  rds_sg_id          = module.security_groups.rds_sg_id
-  db_name            = var.db_name
-  db_username        = var.db_username
-  db_password        = random_password.db.result
-}
-
-module "secrets" {
-  source = "../../modules/secrets"
-
-  name_prefix = var.name_prefix
-  secret_name = var.secret_name
-  db_host     = module.rds.db_address
-  db_name     = var.db_name
-  db_username = var.db_username
-  db_password = random_password.db.result
-}
-
-module "alb" {
-  source = "../../modules/alb"
-
-  name_prefix       = var.name_prefix
-  vpc_id            = module.vpc.vpc_id
-  public_subnet_ids = module.vpc.public_subnet_ids
-  alb_sg_id         = module.security_groups.alb_sg_id
-  health_check_path = var.health_check_path
-}
-
-module "asg" {
-  source = "../../modules/asg"
-
-  name_prefix           = var.name_prefix
-  vpc_id                = module.vpc.vpc_id
-  private_subnet_ids    = module.vpc.private_subnet_ids
-  ec2_sg_id             = module.security_groups.ec2_sg_id
-  target_group_arn      = module.alb.target_group_arn
-  instance_type         = var.instance_type
-  instance_profile_name = var.instance_profile_name
-  secret_arn            = module.secrets.secret_arn
-  aws_region            = var.aws_region
-  min_size              = var.asg_min_size
-  max_size              = var.asg_max_size
-  desired_capacity      = var.asg_desired_capacity
-  artifact_bucket       = module.s3.bucket_id
-  artifact_key          = var.artifact_key
+  cors_rule {
+    allowed_headers = ["*"]
+    allowed_methods = ["GET"]
+    allowed_origins = ["*"]
+    max_age_seconds = 3000
+  }
 }
