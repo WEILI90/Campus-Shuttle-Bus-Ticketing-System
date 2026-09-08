@@ -1,22 +1,40 @@
 # assignment-s3-uploads: holds event photo uploads. Bucket ACLs stay blocked;
 # only unauthenticated GetObject under uploads/* is allowed via bucket policy so
 # images render in the browser, without allowing public listing or writes.
-resource "aws_s3_bucket" "uploads" {
-  bucket = var.bucket_name
+resource "terraform_data" "uploads" {
+  input = var.bucket_name
 
-  # Sandbox environment: by the time you `terraform destroy`, this bucket will
-  # contain uploaded route images, deploy.yml release artifacts, and
-  # db-init.yml's schema.sql/seed-db.sh. AWS refuses to delete a non-empty
-  # bucket, so without force_destroy the destroy would fail on this resource.
-  force_destroy = true
+  # The AWS provider reads object-lock configuration for every aws_s3_bucket.
+  # The Academy account's SCP denies that read, so use the AWS CLI only for
+  # bucket creation/deletion and keep the remaining bucket configuration in
+  # native Terraform resources below.
+  provisioner "local-exec" {
+    interpreter = ["bash", "-c"]
+    command     = "aws s3api head-bucket --bucket '$BUCKET' >/dev/null 2>&1 || aws s3api create-bucket --bucket '$BUCKET' --region '$REGION'; aws s3api put-bucket-tagging --bucket '$BUCKET' --tagging \"TagSet=[{Key=Name,Value=$NAME}]\""
 
-  tags = {
-    Name = "${var.name_prefix}-s3-uploads"
+    environment = {
+      BUCKET = var.bucket_name
+      NAME   = "${var.name_prefix}-s3-uploads"
+      REGION = data.aws_region.current.name
+    }
+  }
+
+  provisioner "local-exec" {
+    when        = destroy
+    interpreter = ["bash", "-c"]
+    command     = "aws s3 rm 's3://$BUCKET' --recursive >/dev/null 2>&1 || true; aws s3api delete-bucket --bucket '$BUCKET' --region '$REGION' >/dev/null 2>&1 || true"
+
+    environment = {
+      BUCKET = self.input
+      REGION = "us-east-1"
+    }
   }
 }
 
+data "aws_region" "current" {}
+
 resource "aws_s3_bucket_public_access_block" "uploads" {
-  bucket = aws_s3_bucket.uploads.id
+  bucket = terraform_data.uploads.output
 
   block_public_acls       = true
   ignore_public_acls      = true
@@ -25,7 +43,7 @@ resource "aws_s3_bucket_public_access_block" "uploads" {
 }
 
 resource "aws_s3_bucket_policy" "public_read" {
-  bucket = aws_s3_bucket.uploads.id
+  bucket = terraform_data.uploads.output
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -34,7 +52,7 @@ resource "aws_s3_bucket_policy" "public_read" {
         Effect    = "Allow"
         Principal = "*"
         Action    = "s3:GetObject"
-        Resource  = "${aws_s3_bucket.uploads.arn}/${var.public_read_prefix}"
+        Resource  = "arn:aws:s3:::${var.bucket_name}/${var.public_read_prefix}"
       }
     ]
   })
@@ -43,7 +61,7 @@ resource "aws_s3_bucket_policy" "public_read" {
 }
 
 resource "aws_s3_bucket_cors_configuration" "uploads" {
-  bucket = aws_s3_bucket.uploads.id
+  bucket = terraform_data.uploads.output
 
   cors_rule {
     allowed_headers = ["*"]
