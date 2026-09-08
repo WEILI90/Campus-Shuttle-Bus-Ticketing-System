@@ -69,6 +69,12 @@ jobs:
       - name: Terraform init
         run: terraform init
 
+      # The S3 module no longer uses aws_s3_bucket because the account SCP
+      # denies its object-lock read. Remove the legacy state address without
+      # deleting the existing bucket; terraform_data adopts it via head-bucket.
+      - name: Remove legacy S3 bucket state
+        run: terraform state rm module.s3.aws_s3_bucket.uploads || true
+
       - name: Terraform validate
         run: terraform validate
 

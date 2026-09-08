@@ -288,12 +288,9 @@ lifecycle can never delete the backend it depends on). The round trip is:
 lock item for the duration of the run so two runs (e.g. you locally + a GitHub Actions run) can't write to
 the state file at the same time and corrupt it. It plays no role in tracking infrastructure health.
 
-One real gotcha this raised: `aws_s3_bucket.uploads` needed `force_destroy = true` (now set in
-[`infra/modules/s3/main.tf`](modules/s3/main.tf)). AWS refuses to delete a non-empty bucket, and by the time
-you run `destroy`, `assignment-s3-uploads` will contain uploaded route images, `deploy.yml`'s release
-artifacts, and `db-init.yml`'s `schema.sql`/`seed-db.sh` - without `force_destroy`, `destroy` would fail
-partway through on that resource, and you'd need to run `db-init.yml` again after the next `apply` regardless
-since it's a fresh RDS instance anyway.
+The S3 module uses `terraform_data` plus the AWS CLI for bucket lifecycle because the Academy SCP denies
+the AWS provider's object-lock read. The deployment workflow removes the legacy
+`module.s3.aws_s3_bucket.uploads` state address without deleting the existing bucket, then adopts it.
 
 ### Do you need to clean up `assignment-tfstate`/`assignment-tf-lock` yourself between rounds? No.
 
