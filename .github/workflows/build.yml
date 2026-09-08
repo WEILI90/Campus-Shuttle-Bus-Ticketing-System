@@ -73,7 +73,11 @@ jobs:
       # denies its object-lock read. Remove the legacy state address without
       # deleting the existing bucket; terraform_data adopts it via head-bucket.
       - name: Remove legacy S3 bucket state
-        run: terraform state rm module.s3.aws_s3_bucket.uploads || true
+        shell: bash
+        run: |
+          if terraform state list | grep -Fxq 'module.s3.aws_s3_bucket.uploads'; then
+            terraform state rm module.s3.aws_s3_bucket.uploads
+          fi
 
       - name: Terraform validate
         run: terraform validate
