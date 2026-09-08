@@ -1,5 +1,5 @@
 output "bucket_id" {
-  value = terraform_data.uploads.output
+  value = var.bucket_name
 }
 
 output "bucket_arn" {
@@ -7,5 +7,5 @@ output "bucket_arn" {
 }
 
 output "bucket_regional_domain_name" {
-  value = "${var.bucket_name}.s3.${data.aws_region.current.name}.amazonaws.com"
+  value = "${var.bucket_name}.s3.amazonaws.com"
 }

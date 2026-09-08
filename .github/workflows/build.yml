@@ -69,11 +69,27 @@ jobs:
       - name: Terraform init
         run: terraform init
 
+      - name: Verify S3 workaround revision
+        shell: bash
+        run: |
+          echo "Checked out commit: $(git rev-parse HEAD)"
+          if grep -R -n --include='*.tf' 'resource "aws_s3_bucket" "uploads"' ../../modules; then
+            echo "Legacy aws_s3_bucket.uploads is still present in the checked-out source."
+            exit 1
+          fi
+
       # The S3 module no longer uses aws_s3_bucket because the account SCP
       # denies its object-lock read. Remove the legacy state address without
       # deleting the existing bucket; terraform_data adopts it via head-bucket.
       - name: Remove legacy S3 bucket state
-        run: terraform state rm module.s3.aws_s3_bucket.uploads || true
+        shell: bash
+        run: |
+          terraform state list | tee terraform-state-before-s3-migration.txt
+          if terraform state list | grep -Fxq 'module.s3.aws_s3_bucket.uploads'; then
+            terraform state rm module.s3.aws_s3_bucket.uploads
+          fi
+          echo "S3 state after migration:"
+          terraform state list | grep 'module.s3\.' || true
 
       - name: Terraform validate
         run: terraform validate
