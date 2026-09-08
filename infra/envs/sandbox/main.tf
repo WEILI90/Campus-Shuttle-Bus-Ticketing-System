@@ -4,6 +4,7 @@
 
 resource "terraform_data" "uploads" {
   input = var.bucket_name
+}
   provisioner "local-exec" {
     command = <<-EOT
       aws s3api create-bucket --bucket "${var.bucket_name}" --region us-east-1
@@ -45,7 +46,7 @@ resource "aws_s3_bucket_public_access_block" "uploads" {
 
 resource "aws_s3_bucket_cors_configuration" "uploads" {
     bucket = var.bucket_name
-
+}
   depends_on = [terraform_data.uploads]
     cors_rule {
     allowed_headers = ["*"]
