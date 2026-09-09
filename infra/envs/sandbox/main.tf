@@ -96,7 +96,7 @@ module "monitoring" {
   alert_email             = var.alert_email
   log_retention_days      = var.log_retention_days
   asg_name                = "${var.name_prefix}-asg" # matches modules/asg's aws_autoscaling_group.app.name
-  rds_instance_id         = "${var.name_prefix}-rds"  # matches modules/rds's aws_db_instance.this.identifier
+  rds_instance_id         = "${var.name_prefix}-rds" # matches modules/rds's aws_db_instance.this.identifier
   alb_arn_suffix          = module.alb.alb_arn_suffix
   target_group_arn_suffix = module.alb.target_group_arn_suffix
 }
