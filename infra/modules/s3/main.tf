@@ -1,3 +1,6 @@
+# assignment-s3-uploads: holds event photo uploads. Bucket ACLs stay blocked;
+# only unauthenticated GetObject under uploads/* is allowed via bucket policy so
+# images render in the browser, without allowing public listing or writes.
 resource "terraform_data" "uploads" {
   input = var.bucket_name
 
