@@ -2,7 +2,7 @@
 set -euxo pipefail
 
 dnf update -y
-dnf install -y httpd php php-mysqlnd php-cli jq unzip mariadb105
+dnf install -y httpd php php-mysqlnd php-cli jq unzip mariadb105 amazon-cloudwatch-agent
 
 # Pull DB connection details from Secrets Manager (assignment-db-credentials)
 # using this instance's IAM role - no credentials are ever hardcoded here.
@@ -47,3 +47,34 @@ fi
 
 systemctl enable httpd
 systemctl restart httpd
+
+# Ship Apache access/error logs to the monitoring module's log group, one
+# stream per instance ID so entries from different instances never collide.
+INSTANCE_ID=$(curl -s -H "X-aws-ec2-metadata-token: $(curl -s -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")" http://169.254.169.254/latest/meta-data/instance-id)
+
+cat <<EOF > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
+{
+  "logs": {
+    "logs_collected": {
+      "files": {
+        "collect_list": [
+          {
+            "file_path": "/var/log/httpd/access_log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "$INSTANCE_ID/access_log"
+          },
+          {
+            "file_path": "/var/log/httpd/error_log",
+            "log_group_name": "${log_group_name}",
+            "log_stream_name": "$INSTANCE_ID/error_log"
+          }
+        ]
+      }
+    }
+  }
+}
+EOF
+
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
+  -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json

@@ -58,6 +58,11 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "log_group_name" {
+  description = "CloudWatch Logs group (from modules/monitoring) that the CloudWatch agent ships Apache access/error logs to."
+  type        = string
+}
+
 variable "min_size" {
   type    = number
   default = 2

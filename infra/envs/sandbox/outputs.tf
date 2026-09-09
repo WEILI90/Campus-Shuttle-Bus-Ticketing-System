@@ -19,3 +19,17 @@ output "secret_arn" {
 output "asg_name" {
   value = module.asg.asg_name
 }
+output "sns_topic_arn" {
+  description = "SNS topic every CloudWatch alarm publishes to. Subscribe additional endpoints here if needed."
+  value       = module.monitoring.sns_topic_arn
+}
+
+output "log_group_name" {
+  description = "CloudWatch Logs group holding Apache access/error logs from every app instance."
+  value       = module.monitoring.log_group_name
+}
+
+output "dashboard_name" {
+  description = "CloudWatch dashboard name - view at console.aws.amazon.com > CloudWatch > Dashboards."
+  value       = module.monitoring.dashboard_name
+}

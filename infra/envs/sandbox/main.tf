@@ -86,4 +86,17 @@ module "asg" {
   desired_capacity      = var.asg_desired_capacity
   artifact_bucket       = module.s3.bucket_id
   artifact_key          = var.artifact_key
+  log_group_name        = module.monitoring.log_group_name
+}
+
+module "monitoring" {
+  source = "../../modules/monitoring"
+
+  name_prefix             = var.name_prefix
+  alert_email             = var.alert_email
+  log_retention_days      = var.log_retention_days
+  asg_name                = "${var.name_prefix}-asg" # matches modules/asg's aws_autoscaling_group.app.name
+  rds_instance_id         = "${var.name_prefix}-rds"  # matches modules/rds's aws_db_instance.this.identifier
+  alb_arn_suffix          = module.alb.alb_arn_suffix
+  target_group_arn_suffix = module.alb.target_group_arn_suffix
 }
