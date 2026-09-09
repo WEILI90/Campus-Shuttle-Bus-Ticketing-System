@@ -8,7 +8,7 @@ resource "terraform_data" "uploads" {
     EOT
   }
 
-    provisioner "local-exec" {
+  provisioner "local-exec" {
     when    = destroy
     command = <<-EOT
       aws s3 rm "s3://${self.input}" --recursive
@@ -51,7 +51,7 @@ resource "aws_s3_bucket_cors_configuration" "uploads" {
 
   depends_on = [terraform_data.uploads]
 
-    cors_rule {
+  cors_rule {
     allowed_headers = ["*"]
     allowed_methods = ["GET"]
     allowed_origins = ["*"]
