@@ -2,7 +2,11 @@
 set -euxo pipefail
 
 dnf update -y
-dnf install -y httpd php php-mysqlnd php-cli jq unzip mariadb105 amazon-cloudwatch-agent
+dnf install -y httpd php php-mysqlnd php-cli jq unzip mariadb105 amazon-cloudwatch-agent amazon-ssm-agent
+
+# Ensure the instance registers with Systems Manager before the deployment job
+# starts polling for an SSM-online instance.
+systemctl enable --now amazon-ssm-agent
 
 # Pull DB connection details from Secrets Manager (assignment-db-credentials)
 # using this instance's IAM role - no credentials are ever hardcoded here.
