@@ -31,8 +31,9 @@ function is_departure_in_past($date, $departureTime) {
 
 // Falls back to a neutral placeholder until an admin uploads a real photo.
 //
-// An S3-stored photo's image_url is already a full https:// URL - returned
-// as-is. A local-disk photo's image_url is root-relative ("/uploads/xxx.jpg")
+// An S3-stored photo's image_url is converted to a short-lived signed URL so
+// the browser can read the private bucket. A local-disk photo's image_url is
+// root-relative ("/uploads/xxx.jpg")
 // and gets turned into a path relative to the current script instead, because
 // this app may be hosted as a subdirectory alongside sibling apps (not at the
 // web server's document root) - a leading "/uploads/..." would then resolve
@@ -40,7 +41,7 @@ function is_departure_in_past($date, $departureTime) {
 function entity_image_url($row) {
     if (!empty($row['image_url'])) {
         if (str_starts_with($row['image_url'], 'https://') || str_starts_with($row['image_url'], 'http://')) {
-            return $row['image_url'];
+            return s3_presigned_get_url($row['image_url']);
         }
 
         $relative = ltrim($row['image_url'], '/');
@@ -185,6 +186,59 @@ function s3_sign($method, $bucket, $region, $key, $payload, $credentials) {
         . "SignedHeaders=$signedHeaders, Signature=$signature";
 
     return [$host, $headers];
+}
+
+// Creates a browser-safe URL for an object in the private uploads bucket.
+function s3_presigned_get_url($url) {
+    if (AWS_S3_BUCKET === '' || !str_starts_with($url, 'https://')) {
+        return $url;
+    }
+
+    $parsed = parse_url($url);
+    $expectedHost = AWS_S3_BUCKET . '.s3.' . AWS_S3_REGION . '.amazonaws.com';
+    if (($parsed['host'] ?? '') !== $expectedHost || empty($parsed['path'])) {
+        return $url;
+    }
+
+    $key = ltrim(rawurldecode($parsed['path']), '/');
+    $encodedKey = implode('/', array_map('rawurlencode', explode('/', $key)));
+    $host = $expectedHost;
+    $amzDate = gmdate('Ymd\THis\Z');
+    $dateStamp = gmdate('Ymd');
+    $expires = 900;
+    $credentials = s3_instance_credentials();
+    if (!$credentials) {
+        return $url;
+    }
+
+    $credentialScope = "$dateStamp/" . AWS_S3_REGION . "/s3/aws4_request";
+    $query = [
+        'X-Amz-Algorithm' => 'AWS4-HMAC-SHA256',
+        'X-Amz-Credential' => $credentials['access_key'] . '/' . $credentialScope,
+        'X-Amz-Date' => $amzDate,
+        'X-Amz-Expires' => (string)$expires,
+        'X-Amz-SignedHeaders' => 'host',
+    ];
+    if (!empty($credentials['token'])) {
+        $query['X-Amz-Security-Token'] = $credentials['token'];
+    }
+    ksort($query);
+    $canonicalQuery = http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+    $canonicalRequest = "GET\n/$encodedKey\n$canonicalQuery\nhost:$host\n\nhost\nUNSIGNED-PAYLOAD";
+    $stringToSign = implode("\n", [
+        'AWS4-HMAC-SHA256',
+        $amzDate,
+        $credentialScope,
+        hash('sha256', $canonicalRequest),
+    ]);
+
+    $kDate = hash_hmac('sha256', $dateStamp, 'AWS4' . $credentials['secret_key'], true);
+    $kRegion = hash_hmac('sha256', AWS_S3_REGION, $kDate, true);
+    $kService = hash_hmac('sha256', 's3', $kRegion, true);
+    $signingKey = hash_hmac('sha256', 'aws4_request', $kService, true);
+    $query['X-Amz-Signature'] = hash_hmac('sha256', $stringToSign, $signingKey);
+
+    return "https://$host/$encodedKey?" . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
 }
 
 // Gets S3 credentials one of two ways: first by asking the EC2 instance's
