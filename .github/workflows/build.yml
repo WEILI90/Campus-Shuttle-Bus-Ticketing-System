@@ -84,12 +84,15 @@ jobs:
       - name: Remove legacy S3 bucket state
         shell: bash
         run: |
-          terraform state list | tee terraform-state-before-s3-migration.txt
-          if terraform state list | grep -Fxq 'module.s3.aws_s3_bucket.uploads'; then
+          terraform state list > terraform-state-before-s3-migration.txt 2>/dev/null || true
+          cat terraform-state-before-s3-migration.txt
+          if grep -Fxq 'module.s3.aws_s3_bucket.uploads' terraform-state-before-s3-migration.txt 2>/dev/null; then
             terraform state rm module.s3.aws_s3_bucket.uploads
+          else
+            echo "No existing state (first apply) or legacy resource not present - nothing to migrate."
           fi
           echo "S3 state after migration:"
-          terraform state list | grep 'module.s3\.' || true
+          terraform state list 2>/dev/null | grep 'module.s3\.' || true
 
       - name: Terraform validate
         run: terraform validate
